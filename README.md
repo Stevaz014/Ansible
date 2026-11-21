@@ -7,7 +7,7 @@ Il repository è pubblico per condividere gli script e raccogliere miglioramenti
 ## Struttura del repository
 
 ```text
-ansible/
+Ansible/
 ├── ansible.cfg                 # Configurazione base di Ansible
 ├── collections/
 │   └── requirements.yml        # Collection Ansible installate automaticamente da Semaphore
@@ -23,7 +23,7 @@ ansible/
 
 ## Uso con Semaphore UI
 
-1. In Semaphore aggiungi un **Repository** puntando a `https://github.com/Stevaz014/ansible.git` (branch `main`).
+1. In Semaphore aggiungi un **Repository** puntando a `https://github.com/Stevaz014/Ansible.git` (branch `main`).
 2. Configura **Inventory** e **Key Store** (chiavi SSH, password `sudo`, eventuale password Ansible Vault) direttamente in Semaphore.
 3. Crea un **Task Template** per ciascun playbook o script indicando il percorso relativo nel repository (es. `playbooks/system/<nome>.yml`).
 
