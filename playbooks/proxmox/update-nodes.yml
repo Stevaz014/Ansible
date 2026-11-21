@@ -1,0 +1,139 @@
+---
+# Aggiornamento automatico e sicuro dei nodi Proxmox VE.
+#
+# Esecuzione in Semaphore UI:
+#   Playbook: playbooks/proxmox/update-nodes.yml
+#   Gruppo inventory: proxmox
+#
+# Variabili configurabili (Survey o Extra Vars in Semaphore):
+#   proxmox_auto_reboot: false     # true per riavviare automaticamente quando serve
+#   proxmox_serial: 1              # quanti nodi aggiornare alla volta (1 = sicuro per cluster)
+#   proxmox_autoremove: true       # rimuove pacchetti non più necessari dopo l'upgrade
+#   proxmox_autoclean: true        # pulisce la cache APT obsoleta
+#   proxmox_reboot_timeout: 600    # timeout (secondi) attesa ritorno online dopo il reboot
+
+- name: Aggiorna nodi Proxmox VE
+  hosts: "{{ proxmox_target_hosts | default('proxmox') }}"
+  become: true
+  gather_facts: true
+  serial: "{{ proxmox_serial | default(1) }}"
+
+  vars:
+    proxmox_auto_reboot: false
+    proxmox_autoremove: true
+    proxmox_autoclean: true
+    proxmox_reboot_timeout: 600
+    proxmox_dpkg_options: "force-confdef,force-confold"
+
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+  pre_tasks:
+    - name: Verifica che il nodo sia effettivamente un host Proxmox VE
+      ansible.builtin.command:
+        cmd: pveversion
+      register: pve_version_before
+      changed_when: false
+      failed_when: pve_version_before.rc != 0
+
+    - name: Mostra versione Proxmox VE attuale
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} — versione attuale: {{ pve_version_before.stdout }}"
+
+  tasks:
+    - name: Aggiorna la cache APT ed esegue dist-upgrade (richiesto da Proxmox VE)
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+        upgrade: dist
+        dpkg_options: "{{ proxmox_dpkg_options }}"
+      register: apt_upgrade_result
+
+    - name: Rimuove pacchetti orfani non più necessari
+      ansible.builtin.apt:
+        autoremove: true
+        purge: false
+      when: proxmox_autoremove | bool
+
+    - name: Pulisce la cache locale dei pacchetti obsoleti
+      ansible.builtin.apt:
+        autoclean: true
+      when: proxmox_autoclean | bool
+
+    - name: Controlla file /var/run/reboot-required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+
+    - name: Rileva il kernel più recente installato in /boot
+      ansible.builtin.shell: |
+        set -o pipefail
+        ls -1 /boot/vmlinuz-* 2>/dev/null | sed 's|/boot/vmlinuz-||' | sort -V | tail -n 1
+      args:
+        executable: /bin/bash
+      register: latest_installed_kernel
+      changed_when: false
+
+    - name: Determina se è necessario un riavvio del nodo
+      ansible.builtin.set_fact:
+        proxmox_needs_reboot: >-
+          {{
+            reboot_required_file.stat.exists
+            or (
+              latest_installed_kernel.stdout | length > 0
+              and latest_installed_kernel.stdout != ansible_kernel
+            )
+          }}
+
+    - name: Mostra esito controllo riavvio
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} — kernel in uso: {{ ansible_kernel }},
+          ultimo installato: {{ latest_installed_kernel.stdout | default('n/d') }},
+          riavvio necessario: {{ proxmox_needs_reboot }}
+
+    - name: Riavvia il nodo Proxmox se necessario e abilitato
+      ansible.builtin.reboot:
+        msg: "Riavvio automatico avviato da Ansible/Semaphore dopo aggiornamento Proxmox VE"
+        connect_timeout: 10
+        reboot_timeout: "{{ proxmox_reboot_timeout }}"
+        pre_reboot_delay: 5
+        post_reboot_delay: 15
+      when:
+        - proxmox_needs_reboot | bool
+        - proxmox_auto_reboot | bool
+
+    - name: Attende che i servizi principali di Proxmox siano attivi dopo il riavvio
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - pvedaemon
+        - pveproxy
+      when:
+        - proxmox_needs_reboot | bool
+        - proxmox_auto_reboot | bool
+
+    - name: Avvisa se è richiesto un riavvio manuale
+      ansible.builtin.debug:
+        msg: >-
+          ATTENZIONE: {{ inventory_hostname }} richiede un riavvio (nuovo kernel o aggiornamenti di sistema).
+          Imposta proxmox_auto_reboot=true per riavviare automaticamente.
+      when:
+        - proxmox_needs_reboot | bool
+        - not (proxmox_auto_reboot | bool)
+
+  post_tasks:
+    - name: Legge la versione Proxmox VE finale
+      ansible.builtin.command:
+        cmd: pveversion
+      register: pve_version_after
+      changed_when: false
+
+    - name: Riepilogo aggiornamento nodo
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} completato —
+          prima: {{ pve_version_before.stdout }} |
+          dopo: {{ pve_version_after.stdout }} |
+          pacchetti aggiornati: {{ 'sì' if apt_upgrade_result.changed else 'nessuno' }}

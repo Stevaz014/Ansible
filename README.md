@@ -14,12 +14,19 @@ Ansible/
 ├── inventory/
 │   └── hosts.example.yml       # Esempio di inventory (nessun dato reale/sensibile)
 ├── playbooks/
+│   ├── proxmox/                # Manutenzione e aggiornamento nodi Proxmox VE
 │   ├── system/                 # Manutenzione sistema, aggiornamenti, configurazioni base
 │   ├── docker/                 # Gestione Docker e stack Compose
 │   └── backup/                 # Automazioni di backup
 ├── roles/                      # Ruoli riutilizzabili tra più playbook
 └── scripts/                    # Script Bash / Python standalone (eseguibili anche da Semaphore)
 ```
+
+## Playbook disponibili
+
+| Playbook | Descrizione | Documentazione |
+| :--- | :--- | :--- |
+| `playbooks/proxmox/update-nodes.yml` | Aggiornamento sicuro (`dist-upgrade`) dei nodi Proxmox VE con controllo kernel e riavvio opzionale | [Guida Proxmox](playbooks/proxmox/README.md) |
 
 ## Uso con Semaphore UI
 
