@@ -1,0 +1,35 @@
+# Ansible
+*.retry
+.ansible/
+
+# Inventory locali e variabili sensibili (nel repo vanno solo i file *.example.*)
+inventory/hosts.yml
+inventory/hosts.ini
+inventory/hosts
+group_vars/*.yml
+!group_vars/*.example.yml
+host_vars/*.yml
+!host_vars/*.example.yml
+
+# Segreti, chiavi e file di ambiente
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pub
+*id_rsa*
+*id_ed25519*
+*vault_pass*
+.vault_pass*
+secrets.yml
+secrets.yaml
+
+# Python / editor / OS
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+**/.DS_Store
+*.swp
+*~

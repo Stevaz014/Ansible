@@ -1,0 +1,5 @@
+---
+# Collection Ansible installate automaticamente da Semaphore prima dei playbook.
+# Aggiungi qui le collection usate dai tuoi playbook (es. community.docker, community.proxmox).
+collections:
+  - name: community.general
